@@ -1,0 +1,5 @@
+Forbidden!Configured service account doesn't have access.
+Service account may have been revoked. customresourcedefinitions.apiextensions.k8s.io "randomkillrequests.yap.onepoint.com" is forbidden:
+User "system:serviceaccount:lemure-dev:slightly-disordered-lemur" cannot get resource "customresourcedefinitions"
+in API group "apiextensions.k8s.io" at the cluster scope.
+

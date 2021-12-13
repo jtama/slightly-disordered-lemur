@@ -1,0 +1,7 @@
+apiVersion: yap.onepoint.com/v1alpha1
+kind: RandomKillRequest
+metadata:
+  name: first-try
+spec:
+  targetOnly: false
+  namespace: lemure-dev
