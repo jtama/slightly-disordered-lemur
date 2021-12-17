@@ -18,8 +18,8 @@ import java.util.random.RandomGenerator;
 @Controller(namespaces = Controller.WATCH_CURRENT_NAMESPACE)
 public class RandomKillController implements ResourceController<RandomKillRequest> {
 
-    Logger logger;
-    KubernetesClient client;
+    private Logger logger;
+    private KubernetesClient client;
 
     public RandomKillController(Logger logger, KubernetesClient client) {
         super();
@@ -46,7 +46,7 @@ public class RandomKillController implements ResourceController<RandomKillReques
             }
             status = Optional.ofNullable(rkr.getMetadata().getAnnotations().get("pod-name"))
                     .map(podName -> controlUpdated(podName, rkr))
-                    .orElseGet(() -> processCreated(rkr));
+                    .orElseGet(() -> processCreation(rkr));
         } catch (Exception e) {
             logger.error("Error querying API", e);
             status = RandomKillRequestStatus.from(State.ERROR, "Error querying API: " + e.getMessage());
@@ -62,14 +62,14 @@ public class RandomKillController implements ResourceController<RandomKillReques
 
     private RandomKillRequestStatus controlUpdated(String podName, RandomKillRequest rkr) {
         Pod pod = client.pods().inNamespace(rkr.getSpec().namespace()).withName(podName).get();
-        if (pod == null) {
+        if (pod == null && !rkr.getSpec().targetOnly()) {
             return RandomKillRequestStatus.from(State.DONE, "Pod has been taken care of");
         }
         deleteIfNeeded(rkr, pod);
         return RandomKillRequestStatus.from(State.PROCESSING, pod.getStatus().getMessage());
     }
 
-    private RandomKillRequestStatus processCreated(RandomKillRequest rkr) {
+    private RandomKillRequestStatus processCreation(RandomKillRequest rkr) {
         List<Pod> podsInNamespace = client.pods().inNamespace(rkr.getSpec().namespace()).list().getItems();
         if (podsInNamespace.size() < 2) {
             return RandomKillRequestStatus.from(State.DONE,"Nothing to do.");
