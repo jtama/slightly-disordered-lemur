@@ -20,14 +20,11 @@ public class RandomInvasionController extends RandomController<RandomInvasionReq
 
     @Override
     protected RandomRequestStatus process(RandomInvasionRequest rkr, String podName) {
-        if (!rkr.getSpec().targetOnly()) {
-            getClient().pods().inNamespace(rkr.getSpec().namespace()).withName(podName)
-                    .writingOutput(System.out)
-                    .usingListener(new LogListener(getLogger()))
-                    .exec("sh", "-c", "echo \\\"%s\\\" > /tmp/invasion.txt".formatted(Invasion.BENDER.toString()).replace("\"", "\\\"").replace("'", "\\'"));
-            return RandomRequestStatus.from(RandomRequestStatus.State.DONE, ("Slightly disordered lemure invaded '%s' 💀.").formatted(podName));
-        }
-        return RandomRequestStatus.from(RandomRequestStatus.State.DONE, "Slightly disordered lemure target is '%s' 🎯".formatted(podName));
+        getClient().pods().inNamespace(rkr.getSpec().namespace()).withName(podName)
+                .writingOutput(System.out)
+                .usingListener(new LogListener(getLogger()))
+                .exec("sh", "-c", "echo \\\"%s\\\" > /tmp/invasion.txt".formatted(Invasion.BENDER.toString()).replace("\"", "\\\"").replace("'", "\\'"));
+        return RandomRequestStatus.from(RandomRequestStatus.State.DONE, ("Slightly disordered lemure invaded '%s' 💀.").formatted(podName));
     }
 
     private class LogListener implements ExecListener {

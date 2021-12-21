@@ -13,12 +13,18 @@ import io.javaoperatorsdk.operator.api.UpdateControl;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.kubernetes.client.KubernetesTestServer;
 import io.quarkus.test.kubernetes.client.WithKubernetesTestServer;
+import okhttp3.mockwebserver.RecordedRequest;
 import org.assertj.core.api.AutoCloseableBDDSoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import javax.inject.Inject;
 import java.util.Map;
+import java.util.stream.Stream;
 
 @QuarkusTest
 @WithKubernetesTestServer
@@ -99,17 +105,22 @@ class RandomKillControllerTest {
         }
     }
 
-    @Test
-    void it_should_return_done_status_with_annotated_when_pod_has_been_targeted_and_has_been_deleted() {
+    @ParameterizedTest
+    @MethodSource("processTestValues")
+    void it_should_return_done_status_with_annotated_when_pod_has_been_targeted(boolean targetOnly, String message) throws Exception{
         //given
         RandomKillRequest rkr = new RandomKillRequest();
-        rkr.setSpec(new RandomRequestSpec("dummy", true));
+        rkr.setSpec(new RandomRequestSpec("dummy", targetOnly));
         ObjectMeta metadata= new ObjectMetaBuilder().withAnnotations(Map.of()).build();
         rkr.setMetadata(metadata);
         mockServer.expect().get().withPath("/api/v1/namespaces/dummy/pods")
                 .andReturn(200,
                         new PodListBuilder()
-                                .withItems(new PodBuilder().withNewMetadata().withName("To be killed").and().build())
+                                .withItems(new PodBuilder()
+                                        .withNewMetadata()
+                                        .withName("To be killed")
+                                        .withNamespace("dummy")
+                                        .and().build())
                                 .build())
                 .always();
         // When
@@ -118,9 +129,19 @@ class RandomKillControllerTest {
         try (AutoCloseableBDDSoftAssertions softly = new AutoCloseableBDDSoftAssertions()) {
             softly.then(updateResource.isUpdateCustomResourceAndStatusSubResource()).isTrue();
             softly.then(updateResource.getCustomResource().getStatus().state()).isEqualTo(RandomRequestStatus.State.DONE);
-            softly.then(updateResource.getCustomResource().getStatus().message()).isEqualTo("Slightly disordered lemure target is 'To be killed' 🎯");
+            softly.then(updateResource.getCustomResource().getStatus().message()).isEqualTo(message);
             softly.then(updateResource.getCustomResource().getMetadata().getAnnotations().get("pod-name")).isEqualTo("To be killed");
+            if (!targetOnly) {
+                RecordedRequest lastRequest = mockServer.getLastRequest();
+                softly.then(lastRequest.getMethod()).isEqualTo("DELETE");
+                softly.then(lastRequest.getPath()).isEqualTo("/api/v1/namespaces/dummy/pods/To%20be%20killed");
+            }
         }
+    }
+
+    static Stream<Arguments> processTestValues(){
+        return Stream.of(Arguments.of(true, "Slightly disordered lemure target is 'To be killed' 🎯."),
+                Arguments.of(false, "Slightly disordered lemure killed 'To be killed' 💀."));
     }
 
 

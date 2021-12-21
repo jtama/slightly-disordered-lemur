@@ -15,10 +15,7 @@ public class RandomKillController extends RandomController<RandomKillRequest> {
     }
 
     protected RandomRequestStatus process(RandomKillRequest rkr, String podName) {
-        if (!rkr.getSpec().targetOnly()) {
-            getClient().pods().withName(podName).delete();
-            return RandomRequestStatus.from(RandomRequestStatus.State.DONE, ("RandomKillRequest killed '%s' 💀.").formatted(podName));
-        }
-        return RandomRequestStatus.from(RandomRequestStatus.State.DONE, "RandomKillRequest target is '%s' 🎯".formatted(podName));
+        getClient().pods().inNamespace(rkr.getSpec().namespace()).withName(podName).delete();
+        return RandomRequestStatus.from(RandomRequestStatus.State.DONE, ("Slightly disordered lemure killed '%s' 💀.").formatted(podName));
     }
 }

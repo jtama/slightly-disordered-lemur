@@ -76,7 +76,7 @@ public abstract class RandomController<T extends RandomRequest> implements Resou
         if (pod.get() == null && !rkr.getSpec().targetOnly()) {
             return RandomRequestStatus.from(RandomRequestStatus.State.DONE, "Pod has been taken care of.");
         }
-        return invadeIfNeeded(rkr, podName);
+        return processIfNeeded(rkr, podName);
     }
 
     private RandomRequestStatus processCreation(T rkr) {
@@ -87,18 +87,18 @@ public abstract class RandomController<T extends RandomRequest> implements Resou
         var pod = podsInNamespace.get(podsInNamespace.size() == 1 ? 0 : RandomGenerator.getDefault().nextInt(0, podsInNamespace.size() - 1));
         rkr.getMetadata().getAnnotations().put("pod-name", pod.getMetadata().getName());
         rkr.getMetadata().getAnnotations().put("pod-uid", pod.getMetadata().getUid());
-        return invadeIfNeeded(rkr, pod.getMetadata().getName());
+        return processIfNeeded(rkr, pod.getMetadata().getName());
     }
 
     private int getMinPod(T rkr) {
         return config.getNamespace().equals(rkr.getMetadata().getNamespace()) ? 2 : 1;
     }
 
-    private RandomRequestStatus invadeIfNeeded(T rkr, String podName) {
+    private RandomRequestStatus processIfNeeded(T rkr, String podName) {
         if (!rkr.getSpec().targetOnly()) {
             return process(rkr, podName);
         }
-        return RandomRequestStatus.from(RandomRequestStatus.State.DONE, "Slightly disordered lemure target is '%s' 🎯".formatted(podName));
+        return RandomRequestStatus.from(RandomRequestStatus.State.DONE, "Slightly disordered lemure target is '%s' 🎯.".formatted(podName));
     }
 
     public KubernetesClient getClient() {
