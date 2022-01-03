@@ -62,6 +62,7 @@ rules:
       - pods/exec
     verbs:
       - create
+      - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -74,7 +75,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: slightly-disordered-lemur
-    namespace: lemur-dev
+    namespace: lemure-dev
 ---
 apiVersion: apps/v1
 kind: Deployment
