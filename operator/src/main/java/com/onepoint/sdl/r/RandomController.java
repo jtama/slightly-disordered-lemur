@@ -1,8 +1,13 @@
 package com.onepoint.sdl.r;
 
+import com.onepoint.sdl.worker.WorkerClientFactory;
+import io.fabric8.kubernetes.api.model.ObjectReferenceBuilder;
 import io.fabric8.kubernetes.api.model.Pod;
+import io.fabric8.kubernetes.api.model.events.v1.EventBuilder;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.Watcher;
+import io.fabric8.kubernetes.client.WatcherException;
 import io.fabric8.kubernetes.client.dsl.PodResource;
 import io.javaoperatorsdk.operator.api.Context;
 import io.javaoperatorsdk.operator.api.DeleteControl;
@@ -10,10 +15,8 @@ import io.javaoperatorsdk.operator.api.ResourceController;
 import io.javaoperatorsdk.operator.api.UpdateControl;
 import org.jboss.logging.Logger;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.random.RandomGenerator;
 
 
 public abstract class RandomController<T extends RandomRequest> implements ResourceController<T> {
@@ -23,16 +26,16 @@ public abstract class RandomController<T extends RandomRequest> implements Resou
 
     private Logger logger;
     private KubernetesClient client;
-    private Config config;
+    private WorkerClientFactory workerClientFactory;
 
     public RandomController() {
     }
 
-    public RandomController(Logger logger, KubernetesClient client, Config config) {
+    public RandomController(Logger logger, KubernetesClient client, Config config, WorkerClientFactory workerClientFactory) {
         super();
         this.logger = logger;
         this.client = client;
-        this.config = config;
+        this.workerClientFactory = workerClientFactory;
 
         logger.warn(config.getNamespace());
     }
@@ -55,8 +58,8 @@ public abstract class RandomController<T extends RandomRequest> implements Resou
                 return UpdateControl.updateStatusSubResource(rkr);
             }
             status = Optional.ofNullable(rkr.getMetadata().getAnnotations().get("pod-name"))
-                    .map(podName -> controlUpdated(podName, rkr))
-                    .orElseGet(() -> processCreation(rkr));
+                .map(podName -> controlUpdated(podName, rkr))
+                .orElseGet(() -> processCreation(rkr));
         } catch (Exception e) {
             logger.error("Error querying API", e);
             status = RandomRequestStatus.from(RandomRequestStatus.State.ERROR, "Error querying API: " + e.getMessage());
@@ -74,34 +77,70 @@ public abstract class RandomController<T extends RandomRequest> implements Resou
     }
 
     private RandomRequestStatus processCreation(T rkr) {
-        List<Pod> podsInNamespace = client.pods().inNamespace(rkr.getSpec().namespace()).list().getItems();
-        if (podsInNamespace.size() < getMinPod(rkr)) {
+        var start = System.currentTimeMillis();
+        String podName = workerClientFactory.getWorkerForNamespace(rkr.getSpec().namespace()).target();
+        if (podName.isBlank()){
             return RandomRequestStatus.from(RandomRequestStatus.State.DONE, "Nothing to do.");
         }
-        var pod = podsInNamespace.get(podsInNamespace.size() == 1 ? 0 : RandomGenerator.getDefault().nextInt(0, podsInNamespace.size() - 1));
-        rkr.getMetadata().getAnnotations().put("pod-name", pod.getMetadata().getName());
-        rkr.getMetadata().getAnnotations().put("pod-uid", pod.getMetadata().getUid());
-        return processIfNeeded(rkr, pod.getMetadata().getName());
-    }
-
-    private int getMinPod(T rkr) {
-        return config.getNamespace().equals(rkr.getMetadata().getNamespace()) ? 2 : 1;
+        rkr.getMetadata().getAnnotations().put("pod-name", podName);
+        client.events().v1().events().inNamespace(rkr.getMetadata().getNamespace()).createOrReplace(
+            new EventBuilder()
+                .withNewMetadata()
+                    .withName("%s-%s".formatted(rkr.getCRDName(),podName))
+                .endMetadata()
+                .withRegarding(new ObjectReferenceBuilder()
+                    .withName(podName)
+                    .build())
+                .withAction("targeted")
+                .withNote("Pod has been targeted in %s ms. 🎯".formatted("" + (System.currentTimeMillis() - start)))
+                .build()
+        );
+        return processIfNeeded(rkr, podName);
     }
 
     private RandomRequestStatus processIfNeeded(T rkr, String podName) {
+        var start = System.currentTimeMillis();
+        client.pods().inNamespace(rkr.getSpec().namespace()).withName(podName).watch(new Watcher<>() {
+            @Override
+            public void eventReceived(Action action, Pod pod) {
+                logger.infof("Action triggered on pod %s : %s", pod.getMetadata().getName(), action.toString());
+                client.resource(rkr).inNamespace(rkr.getMetadata().getNamespace())
+                        .edit(this::setRkrStatusDone);
+                client.events().v1().events().inNamespace(pod.getMetadata().getNamespace()).createOrReplace(
+                    new EventBuilder()
+                        .withNewMetadata()
+                        .withName("%s-%s".formatted(rkr.getCRDName(),podName))
+                        .endMetadata()
+                        .withRegarding(new ObjectReferenceBuilder()
+                            .withName(podName)
+                            .build())
+                        .withAction(rkr.getCRDName())
+                        .withNote("% in %s ms.".formatted(getDoneMessage(podName), (System.currentTimeMillis() - start)))
+                        .build()
+                );
+            }
+
+            private T setRkrStatusDone(T rkr) {
+                rkr.setStatus(RandomRequestStatus.from(RandomRequestStatus.State.DONE, getDoneMessage(podName)));
+                return rkr;
+            }
+
+            @Override
+            public void onClose(WatcherException cause) {
+                logger.error(cause.asClientException());
+            }
+        });
         if (!rkr.getSpec().targetOnly()) {
-            return process(rkr, podName);
+            process(rkr, podName);
         }
         return RandomRequestStatus.from(RandomRequestStatus.State.DONE, "Slightly disordered lemure target is '%s' 🎯.".formatted(podName));
     }
 
-    public KubernetesClient getClient() {
-        return client;
-    }
+    protected abstract void process(T rkr, String podName);
 
-    public Logger getLogger() {
-        return logger;
-    }
+    protected abstract String getDoneMessage(String podName);
 
-    protected abstract RandomRequestStatus process(T rkr, String podName);
+    protected WorkerClientFactory getWorkerClientFactory() {
+        return workerClientFactory;
+    }
 }

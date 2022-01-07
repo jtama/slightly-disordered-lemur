@@ -7,7 +7,7 @@
 #
 # Then, build the image with:
 #
-# docker build -f src/main/docker/Dockerfile.jvm -t quay.io/jtama/slightly-disordered-lemur:1.0 .
+# docker build -f src/main/docker/Dockerfile.jvm -t quay.io/jtama/sld-processor:1.0 .
 #
 # Then run the container using:
 #
@@ -18,7 +18,7 @@
 #
 # Then run the container using :
 #
-# docker run -i --rm -p 8080:8080 -p 5005:5005 -e JAVA_ENABLE_DEBUG="true" quay.io/jtama/slightly-disordered-lemur-jvm
+# docker run -i --rm -p 8080:8080 -p 5005:5005 -e JAVA_ENABLE_DEBUG="true" quay.io/jtama/sld-processor:1.0
 #
 ###
 FROM registry.access.redhat.com/ubi8/ubi-minimal:8.4 

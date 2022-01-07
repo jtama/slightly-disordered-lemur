@@ -1,4 +1,4 @@
-package com.onepoint.sdl.ri;
+package com.onepoint.sdl;
 
 public enum Invasion {
     SKULL("""

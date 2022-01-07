@@ -1,3 +1,4 @@
 package com.onepoint.sdl.r;
 
-public record RandomRequestSpec(String namespace, boolean targetOnly) { }
+public record RandomRequestSpec(String namespace, boolean targetOnly) {
+}
