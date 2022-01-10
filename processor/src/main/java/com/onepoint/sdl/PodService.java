@@ -3,6 +3,7 @@ package com.onepoint.sdl;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.ExecListener;
+import io.fabric8.kubernetes.client.dsl.PodResource;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.subscription.UniEmitter;
 import okhttp3.Response;
@@ -56,14 +57,19 @@ public class PodService {
     }
 
     public Uni<Boolean> invadePod(String podName) {
+
         return Uni.createFrom().emitter(em -> {
-            client.pods().inNamespace(config.namespace()).withName(podName)
-                .writingOutput(System.out)
-                .usingListener(new LogListener(em))
-                .exec("sh", "-c", "echo \\\"%s\\\" > /tmp/invasion.txt".formatted(Invasion.BENDER.toString()).replace("\"", "\\\"").replace("'", "\\'"));
+            PodResource<Pod> pod = client.pods().inNamespace(config.namespace()).withName(podName);
+            if (pod.get() == null) {
+                em.complete(false);
+            } else {
+                pod.writingOutput(System.out)
+                    .usingListener(new LogListener(em))
+                    .exec("sh", "-c", "echo \\\"%s\\\" > /tmp/invasion.txt".formatted(Invasion.BENDER.toString()).replace("\"", "\\\"").replace("'", "\\'"));
+                em.complete(true);
+            }
         });
     }
-
 
     private class LogListener implements ExecListener {
 
