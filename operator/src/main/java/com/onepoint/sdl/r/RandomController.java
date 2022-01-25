@@ -6,8 +6,6 @@ import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.events.v1.EventBuilder;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.Watcher;
-import io.fabric8.kubernetes.client.WatcherException;
 import io.fabric8.kubernetes.client.dsl.PodResource;
 import io.javaoperatorsdk.operator.api.Context;
 import io.javaoperatorsdk.operator.api.DeleteControl;
@@ -15,17 +13,24 @@ import io.javaoperatorsdk.operator.api.ResourceController;
 import io.javaoperatorsdk.operator.api.UpdateControl;
 import org.jboss.logging.Logger;
 
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 
 public abstract class RandomController<T extends RandomRequest> implements ResourceController<T> {
 
 
     private final static Set<RandomRequestStatus.State> NO_UPDATE_STATES = Set.of(RandomRequestStatus.State.DONE, RandomRequestStatus.State.CREATED);
+    private final static DateTimeFormatter microTimeFormatter = DateTimeFormatter
+        .ofPattern("yyyy-MM-dd'T'HH:mm:ss.000000'Z'")
+        .withZone(ZoneId.systemDefault());
 
-    private Logger logger;
-    private KubernetesClient client;
+    protected Logger logger;
+    protected KubernetesClient client;
     private WorkerClientFactory workerClientFactory;
 
     public RandomController() {
@@ -79,68 +84,48 @@ public abstract class RandomController<T extends RandomRequest> implements Resou
     private RandomRequestStatus processCreation(T rkr) {
         var start = System.currentTimeMillis();
         String podName = workerClientFactory.getWorkerForNamespace(rkr.getSpec().namespace()).target();
-        if (podName.isBlank()){
+        if (podName.isBlank()) {
             return RandomRequestStatus.from(RandomRequestStatus.State.DONE, "Nothing to do.");
         }
         rkr.getMetadata().getAnnotations().put("pod-name", podName);
         client.events().v1().events().inNamespace(rkr.getMetadata().getNamespace()).createOrReplace(
             new EventBuilder()
                 .withNewMetadata()
-                    .withName("%s-%s".formatted(rkr.getCRDName(),podName))
+                .withName("%s.%s".formatted(podName, UUID.randomUUID().toString()))
                 .endMetadata()
                 .withRegarding(new ObjectReferenceBuilder()
-                    .withName(podName)
+                    .withName(rkr.getMetadata().getName())
+                    .withNamespace(rkr.getMetadata().getNamespace())
+                    .withApiVersion(rkr.getApiVersion())
+                    .withUid(rkr.getMetadata().getUid())
+                    .withResourceVersion(rkr.getMetadata().getResourceVersion())
+                    .withKind(rkr.getKind())
                     .build())
-                .withAction("targeted")
+                .withReason("targeted")
+                .withAction(rkr.getCRDName())
+                .withReportingController(controllerName())
+                .withReportingInstance(System.getenv("HOSTNAME"))
+                .withNewEventTime(microTimeFormatter.format(ZonedDateTime.now()))
                 .withNote("Pod has been targeted in %s ms. 🎯".formatted("" + (System.currentTimeMillis() - start)))
+                .withType("Normal")
                 .build()
         );
         return processIfNeeded(rkr, podName);
     }
 
     private RandomRequestStatus processIfNeeded(T rkr, String podName) {
-        var start = System.currentTimeMillis();
-        client.pods().inNamespace(rkr.getSpec().namespace()).withName(podName).watch(new Watcher<>() {
-            @Override
-            public void eventReceived(Action action, Pod pod) {
-                logger.infof("Action triggered on pod %s : %s", pod.getMetadata().getName(), action.toString());
-                client.resource(rkr).inNamespace(rkr.getMetadata().getNamespace())
-                        .edit(this::setRkrStatusDone);
-                client.events().v1().events().inNamespace(pod.getMetadata().getNamespace()).createOrReplace(
-                    new EventBuilder()
-                        .withNewMetadata()
-                        .withName("%s-%s".formatted(rkr.getCRDName(),podName))
-                        .endMetadata()
-                        .withRegarding(new ObjectReferenceBuilder()
-                            .withName(podName)
-                            .build())
-                        .withAction(rkr.getCRDName())
-                        .withNote("% in %s ms.".formatted(getDoneMessage(podName), (System.currentTimeMillis() - start)))
-                        .build()
-                );
-            }
-
-            private T setRkrStatusDone(T rkr) {
-                rkr.setStatus(RandomRequestStatus.from(RandomRequestStatus.State.DONE, getDoneMessage(podName)));
-                return rkr;
-            }
-
-            @Override
-            public void onClose(WatcherException cause) {
-                logger.error(cause.asClientException());
-            }
-        });
         if (!rkr.getSpec().targetOnly()) {
             process(rkr, podName);
         }
-        return RandomRequestStatus.from(RandomRequestStatus.State.DONE, "Slightly disordered lemure target is '%s' 🎯.".formatted(podName));
+        return RandomRequestStatus.from(RandomRequestStatus.State.PROCESSING, "Slightly disordered lemure target is '%s' 🎯.".formatted(podName));
     }
 
-    protected abstract void process(T rkr, String podName);
+    protected abstract String controllerName();
 
-    protected abstract String getDoneMessage(String podName);
+    protected abstract void process(T rkr, String podName);
 
     protected WorkerClientFactory getWorkerClientFactory() {
         return workerClientFactory;
     }
+
 }

@@ -14,12 +14,13 @@ public class RandomKillController extends RandomController<RandomKillRequest> {
         super(logger, client, config, workerClientFactory);
     }
 
-    protected void process(RandomKillRequest rkr, String podName) {
-        getWorkerClientFactory().getWorkerForNamespace(rkr.getSpec().namespace()).kill(podName);
+    @Override
+    protected String controllerName() {
+        return this.getClass().getSimpleName();
     }
 
-    @Override
-    protected String getDoneMessage(String podName) {
-        return "Pod %s has been billed. \uD83D\uDC80".formatted(podName);
+    protected void process(RandomKillRequest rkr, String podName) {
+        client.pods().inNamespace(rkr.getSpec().namespace()).withName(podName).watch(new KillPodWatcher(client, logger, rkr, podName, controllerName()));
+        getWorkerClientFactory().getWorkerForNamespace(rkr.getSpec().namespace()).kill(podName);
     }
 }

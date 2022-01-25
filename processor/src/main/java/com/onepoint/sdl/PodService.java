@@ -1,6 +1,7 @@
 package com.onepoint.sdl;
 
 import io.fabric8.kubernetes.api.model.Pod;
+import io.fabric8.kubernetes.api.model.PodBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.ExecListener;
 import io.fabric8.kubernetes.client.dsl.PodResource;
@@ -19,18 +20,22 @@ public class PodService {
     private Logger logger;
     private KubernetesClient client;
     private Configuration config;
+    private RandomGenerator generator;
 
     public PodService(Logger logger, KubernetesClient client, Configuration config) {
         this.logger = logger;
         this.client = client;
         this.config = config;
+        generator = RandomGenerator.getDefault();
     }
 
     public Uni<String> targetPod() {
+        logger.info("Getting random pod name");
         return Uni.createFrom()
             .item(() -> client.pods().inNamespace(config.namespace())
                 .withNewFilter()
-                .withoutField("metadate.name", "sld-worker")
+                .withoutLabel("operator", "sld")
+                .withoutLabel("type", "worker")
                 .endFilter()
                 .list().getItems(), this::getRandomPod);
     }
@@ -40,7 +45,7 @@ public class PodService {
             logger.info("No pod available for targeting.");
             return "";
         }
-        return pods.get(RandomGenerator.getDefault().nextInt(0, pods.size())).getMetadata().getName();
+        return pods.get(generator.nextInt(0, pods.size())).getMetadata().getName();
     }
 
     public Uni<Boolean> killPod(String podName) {
@@ -64,9 +69,8 @@ public class PodService {
                 em.complete(false);
             } else {
                 pod.writingOutput(System.out)
-                    .usingListener(new LogListener(em))
+                    .usingListener(new LogListener(em, pod.get()))
                     .exec("sh", "-c", "echo \\\"%s\\\" > /tmp/invasion.txt".formatted(Invasion.BENDER.toString()).replace("\"", "\\\"").replace("'", "\\'"));
-                em.complete(true);
             }
         });
     }
@@ -74,9 +78,11 @@ public class PodService {
     private class LogListener implements ExecListener {
 
         private UniEmitter<? super Boolean> em;
+        private Pod pod;
 
-        public LogListener(UniEmitter<? super Boolean> em) {
+        public LogListener(UniEmitter<? super Boolean> em, Pod pod) {
             this.em = em;
+            this.pod = pod;
         }
 
         @Override
@@ -93,6 +99,15 @@ public class PodService {
         @Override
         public void onClose(int code, String reason) {
             logger.info("Invasion successfull");
+            client.pods()
+                .inNamespace(pod.getMetadata().getNamespace())
+                .withName(pod.getMetadata().getName())
+                .edit(item -> new PodBuilder(item)
+                    .editOrNewMetadata()
+                    .addToAnnotations("sld-invasion", "success")
+                    .endMetadata()
+                    .build());
+            logger.info("Pod annotated");
             em.complete(code == 1000);
         }
     }

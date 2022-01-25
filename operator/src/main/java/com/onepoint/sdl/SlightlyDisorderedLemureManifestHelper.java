@@ -3,6 +3,7 @@ package com.onepoint.sdl;
 import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.ContainerBuilder;
 import io.fabric8.kubernetes.api.model.ContainerPortBuilder;
+import io.fabric8.kubernetes.api.model.EnvVarBuilder;
 import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.ServiceAccount;
 import io.fabric8.kubernetes.api.model.ServiceAccountBuilder;
@@ -92,9 +93,6 @@ public class SlightlyDisorderedLemureManifestHelper {
             .withNewSpec()
             .withContainers(containers(namespace, sa, config))
             .withServiceAccountName(sa.getMetadata().getName())
-            .addNewImagePullSecret()
-            .withName(config.secret().orElse(""))
-            .endImagePullSecret()
             .endSpec()
             .endTemplate()
             .endSpec()
@@ -127,6 +125,10 @@ public class SlightlyDisorderedLemureManifestHelper {
                 .withName("sld-worker")
                 .withImage("%s/slightly-disordered-worker:1.0".formatted(config.privateRegistry()))
                 .withImagePullPolicy("Always")
+                .withEnv(List.of(new EnvVarBuilder()
+                    .withName("sld.namespace")
+                    .withValue(namespace)
+                    .build()))
                 .withNewLivenessProbe()
                 .withFailureThreshold(3)
                 .withNewHttpGet()

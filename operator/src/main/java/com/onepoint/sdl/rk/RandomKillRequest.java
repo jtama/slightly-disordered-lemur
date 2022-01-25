@@ -11,4 +11,8 @@ import io.fabric8.kubernetes.model.annotation.Version;
 public class RandomKillRequest extends RandomRequest {
 
 
+    @Override
+    public String getDoneMessage(String podName) {
+        return "Pod %s has been billed. \uD83D\uDC80".formatted(podName);
+    }
 }

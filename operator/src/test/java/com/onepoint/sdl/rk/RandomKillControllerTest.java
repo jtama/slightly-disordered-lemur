@@ -53,6 +53,11 @@ class RandomKillControllerTest {
         QuarkusMock.installMockForType(mock, WorkerClientFactory.class);
     }
 
+    static Stream<Arguments> processTestValues() {
+        return Stream.of(Arguments.of(true, "Slightly disordered lemure target is 'pod0' 🎯."),
+            Arguments.of(false, "Slightly disordered lemure killed 'pod0' 💀."));
+    }
+
     @BeforeEach
     public void before() {
         mockServer.expect().get().withPath("/api/v1/namespaces/unknown")
@@ -139,18 +144,13 @@ class RandomKillControllerTest {
         // Then
         try (AutoCloseableBDDSoftAssertions softly = new AutoCloseableBDDSoftAssertions()) {
             softly.then(updateResource.isUpdateCustomResourceAndStatusSubResource()).isTrue();
-            softly.then(updateResource.getCustomResource().getStatus().state()).isEqualTo(RandomRequestStatus.State.DONE);
+            softly.then(updateResource.getCustomResource().getStatus().state()).isEqualTo(RandomRequestStatus.State.PROCESSING);
             softly.then(updateResource.getCustomResource().getStatus().message()).isEqualTo("Slightly disordered lemure target is 'pod0' 🎯.");
             softly.then(updateResource.getCustomResource().getMetadata().getAnnotations().get("pod-name")).isEqualTo("pod0");
             if (!targetOnly) {
                 softly.thenCode(() -> verify(clientFactory.getWorkerForNamespace(any())).kill(eq("pod0"))).doesNotThrowAnyException();
             }
         }
-    }
-
-    static Stream<Arguments> processTestValues() {
-        return Stream.of(Arguments.of(true, "Slightly disordered lemure target is 'pod0' 🎯."),
-            Arguments.of(false, "Slightly disordered lemure killed 'pod0' 💀."));
     }
 
 

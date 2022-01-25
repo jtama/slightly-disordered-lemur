@@ -1,7 +1,7 @@
 apiVersion: yap.onepoint.com/v1alpha1
 kind: RandomInvasionRequest
 metadata:
-  name: first-try
+  name: second-try
 spec:
   targetOnly: false
-  namespace: yap-dev
+  namespace: lemure-dev

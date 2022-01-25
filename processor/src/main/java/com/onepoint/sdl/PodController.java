@@ -4,20 +4,26 @@ import io.smallrye.mutiny.Uni;
 import org.jboss.resteasy.reactive.RestResponse;
 import org.jboss.resteasy.reactive.server.jaxrs.RestResponseBuilderImpl;
 
+import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
 
 @Path("pods")
-public class KillController {
+@Consumes(MediaType.APPLICATION_JSON)
+@Produces(MediaType.APPLICATION_JSON)
+public class PodController {
 
     private PodService podService;
 
-    public KillController(PodService podService) {
+    public PodController(PodService podService) {
         this.podService = podService;
     }
 
     @GET
+    @Path("target")
     public Uni<String> target() {
         return podService.targetPod();
     }

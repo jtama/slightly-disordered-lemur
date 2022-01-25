@@ -10,5 +10,8 @@ import io.fabric8.kubernetes.model.annotation.Version;
 @ShortNames("rir")
 public class RandomInvasionRequest extends RandomRequest {
 
-
+    @Override
+    public String getDoneMessage(String podName) {
+        return "Pod %s has been invaded. \uD83C\uDFAF".formatted(podName);
+    }
 }

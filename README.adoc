@@ -10,13 +10,12 @@ If you want to learn more about Quarkus, please visit its website: https://quark
 
 [IMPORTANT]
 ====
- This cannot be build to native to due to limitations in GraalVM that isn't compatible with record usage at the time being.
+This cannot be build to native to due to limitations in GraalVM that isn't compatible with record usage at the time being.
 ====
 
 == Integration testing
 
-Testing is done using `@WithKubernetesTestServer` annotation which allows us to mock a distant K8S server  and pilot it's behaviours.
-
+Testing is done using `@WithKubernetesTestServer` annotation which allows us to mock a distant K8S server and pilot it's behaviours.
 
 == Running the application in dev mode
 
@@ -27,10 +26,9 @@ Before running your application in dev mode, make sure to connect to a K8S clust
 kubectl config set-context --current --namespace=
 ----
 
-
-
 You can run your application in dev mode that enables live coding using:
 [source,bash]
+
 ----
 ./mvnw compile quarkus:dev
 ----

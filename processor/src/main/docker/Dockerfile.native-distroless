@@ -7,11 +7,11 @@
 #
 # Then, build the image with:
 #
-# docker build -f src/main/docker/Dockerfile.native-distroless -t quay.io/jtama/sld-processor:1.0 .
+# docker build -f src/main/docker/Dockerfile.native-distroless -t quay.io/jtama/slightly-disordered-worker:1.0 .
 #
 # Then run the container using:
 #
-# docker run -i --rm -p 8080:8080 quay.io/jtama/sld-processor:1.0
+# docker run -i --rm -p 8080:8080 quay.io/jtama/slightly-disordered-worker:1.0
 #
 ###
 FROM quay.io/quarkus/quarkus-distroless-image:1.0
