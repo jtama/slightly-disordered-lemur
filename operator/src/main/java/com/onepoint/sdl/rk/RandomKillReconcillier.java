@@ -1,16 +1,18 @@
 package com.onepoint.sdl.rk;
 
-import com.onepoint.sdl.r.RandomController;
+import com.onepoint.sdl.r.RandomReconcillier;
 import com.onepoint.sdl.worker.WorkerClientFactory;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
-import io.javaoperatorsdk.operator.api.Controller;
+import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
 import org.jboss.logging.Logger;
 
-@Controller(namespaces = Controller.WATCH_CURRENT_NAMESPACE)
-public class RandomKillController extends RandomController<RandomKillRequest> {
+import static io.javaoperatorsdk.operator.api.reconciler.Constants.WATCH_CURRENT_NAMESPACE;
 
-    public RandomKillController(Logger logger, KubernetesClient client, Config config, WorkerClientFactory workerClientFactory) {
+@ControllerConfiguration(namespaces = WATCH_CURRENT_NAMESPACE)
+public class RandomKillReconcillier extends RandomReconcillier<RandomKillRequest> {
+
+    public RandomKillReconcillier(Logger logger, KubernetesClient client, Config config, WorkerClientFactory workerClientFactory) {
         super(logger, client, config, workerClientFactory);
     }
 

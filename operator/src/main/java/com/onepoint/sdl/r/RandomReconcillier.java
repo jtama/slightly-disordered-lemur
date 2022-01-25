@@ -7,10 +7,9 @@ import io.fabric8.kubernetes.api.model.events.v1.EventBuilder;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.PodResource;
-import io.javaoperatorsdk.operator.api.Context;
-import io.javaoperatorsdk.operator.api.DeleteControl;
-import io.javaoperatorsdk.operator.api.ResourceController;
-import io.javaoperatorsdk.operator.api.UpdateControl;
+import io.javaoperatorsdk.operator.api.reconciler.Context;
+import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
+import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import org.jboss.logging.Logger;
 
 import java.time.ZoneId;
@@ -21,7 +20,7 @@ import java.util.Set;
 import java.util.UUID;
 
 
-public abstract class RandomController<T extends RandomRequest> implements ResourceController<T> {
+public abstract class RandomReconcillier<T extends RandomRequest> implements Reconciler<T> {
 
 
     private final static Set<RandomRequestStatus.State> NO_UPDATE_STATES = Set.of(RandomRequestStatus.State.DONE, RandomRequestStatus.State.CREATED);
@@ -33,10 +32,10 @@ public abstract class RandomController<T extends RandomRequest> implements Resou
     protected KubernetesClient client;
     private WorkerClientFactory workerClientFactory;
 
-    public RandomController() {
+    public RandomReconcillier() {
     }
 
-    public RandomController(Logger logger, KubernetesClient client, Config config, WorkerClientFactory workerClientFactory) {
+    public RandomReconcillier(Logger logger, KubernetesClient client, Config config, WorkerClientFactory workerClientFactory) {
         super();
         this.logger = logger;
         this.client = client;
@@ -46,12 +45,7 @@ public abstract class RandomController<T extends RandomRequest> implements Resou
     }
 
     @Override
-    public DeleteControl deleteResource(T resource, Context<T> context) {
-        return DeleteControl.DEFAULT_DELETE;
-    }
-
-    @Override
-    public UpdateControl<T> createOrUpdateResource(T rkr, Context<T> context) {
+    public UpdateControl<T> reconcile(T rkr, Context context) {
         var spec = rkr.getSpec();
         var status = rkr.getStatus();
         if (status != null && NO_UPDATE_STATES.contains(status.state())) {
@@ -60,7 +54,7 @@ public abstract class RandomController<T extends RandomRequest> implements Resou
         try {
             if (client.namespaces().withName(spec.namespace()).get() == null) {
                 rkr.setStatus(RandomRequestStatus.from(RandomRequestStatus.State.ERROR, "No %s namespace exists in cluster".formatted(spec.namespace())));
-                return UpdateControl.updateStatusSubResource(rkr);
+                return UpdateControl.updateResourceAndStatus(rkr);
             }
             status = Optional.ofNullable(rkr.getMetadata().getAnnotations().get("pod-name"))
                 .map(podName -> controlUpdated(podName, rkr))
@@ -70,7 +64,7 @@ public abstract class RandomController<T extends RandomRequest> implements Resou
             status = RandomRequestStatus.from(RandomRequestStatus.State.ERROR, "Error querying API: " + e.getMessage());
         }
         rkr.setStatus(status);
-        return UpdateControl.updateCustomResourceAndStatus(rkr);
+        return UpdateControl.updateResourceAndStatus(rkr);
     }
 
     private RandomRequestStatus controlUpdated(String podName, T rkr) {

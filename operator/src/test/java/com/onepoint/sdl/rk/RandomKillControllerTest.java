@@ -8,7 +8,7 @@ import io.fabric8.kubernetes.api.model.NamespaceListBuilder;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.client.server.mock.KubernetesServer;
-import io.javaoperatorsdk.operator.api.UpdateControl;
+import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import io.quarkus.test.junit.QuarkusMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.kubernetes.client.KubernetesTestServer;
@@ -38,7 +38,7 @@ import static org.mockito.Mockito.verify;
 class RandomKillControllerTest {
 
     @Inject
-    RandomKillController controller;
+    RandomKillReconcillier controller;
 
     @Inject
     WorkerClientFactory clientFactory;
@@ -51,11 +51,6 @@ class RandomKillControllerTest {
     public static void beforeAll() {
         WorkerClientFactory mock = mock(WorkerClientFactory.class, RETURNS_DEEP_STUBS);
         QuarkusMock.installMockForType(mock, WorkerClientFactory.class);
-    }
-
-    static Stream<Arguments> processTestValues() {
-        return Stream.of(Arguments.of(true, "Slightly disordered lemure target is 'pod0' 🎯."),
-            Arguments.of(false, "Slightly disordered lemure killed 'pod0' 💀."));
     }
 
     @BeforeEach
@@ -84,12 +79,11 @@ class RandomKillControllerTest {
         RandomKillRequest rkr = new RandomKillRequest();
         rkr.setSpec(new RandomRequestSpec("unknown", false));
         // When
-        UpdateControl<RandomKillRequest> updateResource = controller.createOrUpdateResource(rkr, null);
+        UpdateControl<RandomKillRequest> updateResource = controller.reconcile(rkr, null);
         // Then
         try (AutoCloseableBDDSoftAssertions softly = new AutoCloseableBDDSoftAssertions()) {
-            softly.then(updateResource.isUpdateCustomResource()).isFalse();
-            softly.then(updateResource.isUpdateStatusSubResource()).isTrue();
-            softly.then(updateResource.getCustomResource().getStatus().state()).isEqualTo(RandomRequestStatus.State.ERROR);
+            softly.then(updateResource.isUpdateResourceAndStatus()).isTrue();
+            softly.then(updateResource.getResource().getStatus().state()).isEqualTo(RandomRequestStatus.State.ERROR);
         }
     }
 
@@ -102,12 +96,12 @@ class RandomKillControllerTest {
         rkr.setMetadata(metadata);
         given(clientFactory.getWorkerForNamespace(any()).target()).willReturn("");
         // When
-        UpdateControl<RandomKillRequest> updateResource = controller.createOrUpdateResource(rkr, null);
+        UpdateControl<RandomKillRequest> updateResource = controller.reconcile(rkr, null);
         // Then
         try (AutoCloseableBDDSoftAssertions softly = new AutoCloseableBDDSoftAssertions()) {
-            softly.then(updateResource.isUpdateCustomResourceAndStatusSubResource()).isTrue();
-            softly.then(updateResource.getCustomResource().getStatus().state()).isEqualTo(RandomRequestStatus.State.DONE);
-            softly.then(updateResource.getCustomResource().getStatus().message()).isEqualTo("Nothing to do.");
+            softly.then(updateResource.isUpdateResourceAndStatus()).isTrue();
+            softly.then(updateResource.getResource().getStatus().state()).isEqualTo(RandomRequestStatus.State.DONE);
+            softly.then(updateResource.getResource().getStatus().message()).isEqualTo("Nothing to do.");
         }
     }
 
@@ -119,12 +113,12 @@ class RandomKillControllerTest {
         ObjectMeta metadata = new ObjectMetaBuilder().withAnnotations(Map.of("pod-name", "targetted")).build();
         rkr.setMetadata(metadata);
         // When
-        UpdateControl<RandomKillRequest> updateResource = controller.createOrUpdateResource(rkr, null);
+        UpdateControl<RandomKillRequest> updateResource = controller.reconcile(rkr, null);
         // Then
         try (AutoCloseableBDDSoftAssertions softly = new AutoCloseableBDDSoftAssertions()) {
-            softly.then(updateResource.isUpdateCustomResourceAndStatusSubResource()).isTrue();
-            softly.then(updateResource.getCustomResource().getStatus().state()).isEqualTo(RandomRequestStatus.State.DONE);
-            softly.then(updateResource.getCustomResource().getStatus().message()).isEqualTo("Pod has been taken care of.");
+            softly.then(updateResource.isUpdateResourceAndStatus()).isTrue();
+            softly.then(updateResource.getResource().getStatus().state()).isEqualTo(RandomRequestStatus.State.DONE);
+            softly.then(updateResource.getResource().getStatus().message()).isEqualTo("Pod has been taken care of.");
         }
     }
 
@@ -140,17 +134,22 @@ class RandomKillControllerTest {
 
         given(clientFactory.getWorkerForNamespace(any()).target()).willReturn("pod0");
         // When
-        UpdateControl<RandomKillRequest> updateResource = controller.createOrUpdateResource(rkr, null);
+        UpdateControl<RandomKillRequest> updateResource = controller.reconcile(rkr, null);
         // Then
         try (AutoCloseableBDDSoftAssertions softly = new AutoCloseableBDDSoftAssertions()) {
-            softly.then(updateResource.isUpdateCustomResourceAndStatusSubResource()).isTrue();
-            softly.then(updateResource.getCustomResource().getStatus().state()).isEqualTo(RandomRequestStatus.State.PROCESSING);
-            softly.then(updateResource.getCustomResource().getStatus().message()).isEqualTo("Slightly disordered lemure target is 'pod0' 🎯.");
-            softly.then(updateResource.getCustomResource().getMetadata().getAnnotations().get("pod-name")).isEqualTo("pod0");
+            softly.then(updateResource.isUpdateResourceAndStatus()).isTrue();
+            softly.then(updateResource.getResource().getStatus().state()).isEqualTo(RandomRequestStatus.State.PROCESSING);
+            softly.then(updateResource.getResource().getStatus().message()).isEqualTo("Slightly disordered lemure target is 'pod0' 🎯.");
+            softly.then(updateResource.getResource().getMetadata().getAnnotations().get("pod-name")).isEqualTo("pod0");
             if (!targetOnly) {
                 softly.thenCode(() -> verify(clientFactory.getWorkerForNamespace(any())).kill(eq("pod0"))).doesNotThrowAnyException();
             }
         }
+    }
+
+    static Stream<Arguments> processTestValues() {
+        return Stream.of(Arguments.of(true, "Slightly disordered lemure target is 'pod0' 🎯."),
+            Arguments.of(false, "Slightly disordered lemure killed 'pod0' 💀."));
     }
 
 
