@@ -25,6 +25,7 @@ public class RandomInvasionReconcillier extends RandomReconcillier<RandomInvasio
     @Override
     protected void process(RandomInvasionRequest rkr, String podName) {
         client.pods().inNamespace(rkr.getSpec().namespace()).withName(podName).watch(new InvadePodWatcher(client, logger, rkr, podName, controllerName()));
+        logger.debugf("Invoking worker.", this.toString());
         getWorkerClientFactory().getWorkerForNamespace(rkr.getSpec().namespace()).invade(podName);
     }
 

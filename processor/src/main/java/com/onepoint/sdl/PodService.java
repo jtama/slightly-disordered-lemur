@@ -62,7 +62,7 @@ public class PodService {
     }
 
     public Uni<Boolean> invadePod(String podName) {
-
+        logger.infof("Invading pod %s:%s.", config.namespace(), podName);
         return Uni.createFrom().emitter(em -> {
             PodResource<Pod> pod = client.pods().inNamespace(config.namespace()).withName(podName);
             if (pod.get() == null) {
@@ -99,7 +99,7 @@ public class PodService {
         @Override
         public void onClose(int code, String reason) {
             logger.info("Invasion successfull");
-            client.pods()
+            Pod edited = client.pods()
                 .inNamespace(pod.getMetadata().getNamespace())
                 .withName(pod.getMetadata().getName())
                 .edit(item -> new PodBuilder(item)
@@ -107,7 +107,7 @@ public class PodService {
                     .addToAnnotations("sld-invasion", "success")
                     .endMetadata()
                     .build());
-            logger.info("Pod annotated");
+            logger.infof("Pod annotated with %s", edited.getMetadata().getAnnotations().get("sld-invasion"));
             em.complete(code == 1000);
         }
     }

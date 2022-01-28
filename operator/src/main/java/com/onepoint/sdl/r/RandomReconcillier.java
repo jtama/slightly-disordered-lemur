@@ -48,11 +48,13 @@ public abstract class RandomReconcillier<T extends RandomRequest> implements Rec
     public UpdateControl<T> reconcile(T rkr, Context context) {
         var spec = rkr.getSpec();
         var status = rkr.getStatus();
+        logger.debugf("Received reconcialation request for '%s' with status '%s'", rkr.getMetadata().getName(), status);
         if (status != null && NO_UPDATE_STATES.contains(status.state())) {
             return UpdateControl.noUpdate();
         }
         try {
             if (client.namespaces().withName(spec.namespace()).get() == null) {
+                logger.debugf("No %s namespace exists in cluster", spec.namespace());
                 rkr.setStatus(RandomRequestStatus.from(RandomRequestStatus.State.ERROR, "No %s namespace exists in cluster".formatted(spec.namespace())));
                 return UpdateControl.updateResourceAndStatus(rkr);
             }
@@ -70,17 +72,22 @@ public abstract class RandomReconcillier<T extends RandomRequest> implements Rec
     private RandomRequestStatus controlUpdated(String podName, T rkr) {
         PodResource<Pod> pod = client.pods().inNamespace(rkr.getSpec().namespace()).withName(podName);
         if (pod.get() == null && !rkr.getSpec().targetOnly()) {
+            logger.debugf("Pod '%s' no longer exists", podName);
             return RandomRequestStatus.from(RandomRequestStatus.State.DONE, "Pod has been taken care of.");
         }
         return processIfNeeded(rkr, podName);
     }
 
     private RandomRequestStatus processCreation(T rkr) {
+        logger.debugf("Targeting '%s' for the first time", rkr.getMetadata().getName());
         var start = System.currentTimeMillis();
         String podName = workerClientFactory.getWorkerForNamespace(rkr.getSpec().namespace()).target();
-        if (podName.isBlank()) {
+        if (podName == null || podName.isBlank()) {
+            logger.debugf("Processed '%s' for the first time. Nothing to do.", rkr.getMetadata().getName());
             return RandomRequestStatus.from(RandomRequestStatus.State.DONE, "Nothing to do.");
         }
+
+        logger.debugf("Adding annotation and event on '%s'.", rkr.getMetadata().getName());
         rkr.getMetadata().getAnnotations().put("pod-name", podName);
         client.events().v1().events().inNamespace(rkr.getMetadata().getNamespace()).createOrReplace(
             new EventBuilder()
@@ -96,9 +103,9 @@ public abstract class RandomReconcillier<T extends RandomRequest> implements Rec
                     .withKind(rkr.getKind())
                     .build())
                 .withReason("targeted")
-                .withAction(rkr.getCRDName())
                 .withReportingController(controllerName())
                 .withReportingInstance(System.getenv("HOSTNAME"))
+                .withAction(rkr.getCRDName())
                 .withNewEventTime(microTimeFormatter.format(ZonedDateTime.now()))
                 .withNote("Pod has been targeted in %s ms. 🎯".formatted("" + (System.currentTimeMillis() - start)))
                 .withType("Normal")
@@ -109,7 +116,10 @@ public abstract class RandomReconcillier<T extends RandomRequest> implements Rec
 
     private RandomRequestStatus processIfNeeded(T rkr, String podName) {
         if (!rkr.getSpec().targetOnly()) {
+            logger.debugf("Asking processing '%s'.", rkr.getMetadata().getName());
             process(rkr, podName);
+        } else {
+            logger.debugf("Not processing '%s', targeting only.", rkr.getMetadata().getName());
         }
         return RandomRequestStatus.from(RandomRequestStatus.State.PROCESSING, "Slightly disordered lemure target is '%s' 🎯.".formatted(podName));
     }

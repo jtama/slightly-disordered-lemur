@@ -23,6 +23,7 @@ public class RandomKillReconcillier extends RandomReconcillier<RandomKillRequest
 
     protected void process(RandomKillRequest rkr, String podName) {
         client.pods().inNamespace(rkr.getSpec().namespace()).withName(podName).watch(new KillPodWatcher(client, logger, rkr, podName, controllerName()));
+        logger.debugf("Invoking worker.", this.toString());
         getWorkerClientFactory().getWorkerForNamespace(rkr.getSpec().namespace()).kill(podName);
     }
 }
