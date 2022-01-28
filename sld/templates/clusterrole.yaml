@@ -1,0 +1,59 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "sld.serviceAccountName" . }}-cluster-role
+rules:
+  - apiGroups: [ "sld.onepoint.com" ]
+    resources:
+      - randomkillrequests
+      - randomkillrequests/status
+      - randominvasionrequests
+      - randominvasionrequests/status
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - patch
+      - update
+  - apiGroups: [ "" ]
+    resources:
+      - pods
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+      - delete
+  - apiGroups: [ "" ]
+    resources:
+      - pods/exec
+      - serviceaccounts
+      - services
+    verbs:
+      - create
+      - update
+      - get
+  - apiGroups: [ "rbac.authorization.k8s.io" ]
+    resources:
+      - clusterroles
+      - rolebindings
+    verbs:
+      - create
+      - update
+      - get
+  - apiGroups: [ "events.k8s.io" ]
+    resources:
+      - events
+    verbs:
+      - create
+      - update
+      - get
+  - apiGroups: [ "apps" ]
+    resources:
+      - deployments
+    verbs:
+      - create
+      - update
+      - get

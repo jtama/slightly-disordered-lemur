@@ -1,0 +1,9 @@
+apiVersion: v2
+name: sld
+description: A Helm chart for slightly disorder lemure operator
+
+type: application
+
+version: 0.1.0
+
+appVersion: "1.0"
