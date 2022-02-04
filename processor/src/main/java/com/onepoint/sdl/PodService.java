@@ -86,7 +86,7 @@ public class PodService {
         }
 
         @Override
-        public void onOpen(Response response) {
+        public void onOpen() {
             logger.info("Beginning invasion:");
         }
 
